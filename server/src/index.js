@@ -18,13 +18,25 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 // Redis connection
-const redis = process.env.REDIS_URL 
-  ? new Redis(process.env.REDIS_URL)
-  : null;
-
-if (redis) {
-  redis.on('connect', () => console.log('Connected to Redis'));
-  redis.on('error', (err) => console.error('Redis error:', err));
+let redis = null;
+if (process.env.REDIS_URL) {
+  try {
+    redis = new Redis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: 3,
+      retryDelayOnFailover: 100,
+      lazyConnect: false
+    });
+    
+    redis.on('connect', () => console.log('Connected to Redis'));
+    redis.on('ready', () => console.log('Redis ready'));
+    redis.on('error', (err) => console.error('Redis error:', err.message));
+    redis.on('close', () => console.log('Redis connection closed'));
+  } catch (err) {
+    console.error('Failed to create Redis connection:', err.message);
+    redis = null;
+  }
+} else {
+  console.log('No REDIS_URL found, using in-memory storage only');
 }
 
 // Helper functions for Redis storage
