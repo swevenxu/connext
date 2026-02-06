@@ -17,26 +17,39 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Redis connection
+// Redis connection - completely optional
 let redis = null;
-if (process.env.REDIS_URL) {
+const REDIS_ENABLED = process.env.REDIS_URL && process.env.USE_REDIS === 'true';
+
+if (REDIS_ENABLED) {
   try {
     redis = new Redis(process.env.REDIS_URL, {
-      maxRetriesPerRequest: 3,
+      maxRetriesPerRequest: 1,
       retryDelayOnFailover: 100,
-      lazyConnect: false
+      connectTimeout: 5000,
+      lazyConnect: true
     });
     
     redis.on('connect', () => console.log('Connected to Redis'));
     redis.on('ready', () => console.log('Redis ready'));
-    redis.on('error', (err) => console.error('Redis error:', err.message));
+    redis.on('error', (err) => {
+      console.error('Redis error:', err.message);
+      // Don't crash, just disable Redis
+      redis = null;
+    });
     redis.on('close', () => console.log('Redis connection closed'));
+    
+    // Try to connect
+    redis.connect().catch(err => {
+      console.error('Redis connect failed:', err.message);
+      redis = null;
+    });
   } catch (err) {
     console.error('Failed to create Redis connection:', err.message);
     redis = null;
   }
 } else {
-  console.log('No REDIS_URL found, using in-memory storage only');
+  console.log('Redis disabled, using in-memory storage only');
 }
 
 // Helper functions for Redis storage
