@@ -6,6 +6,7 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
+const Redis = require('ioredis');
 
 const app = express();
 
@@ -14,6 +15,53 @@ const uploadsDir = path.join(__dirname, '..', 'uploads');
 const publicDir = path.join(__dirname, '..', 'public');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Redis connection
+const redis = process.env.REDIS_URL 
+  ? new Redis(process.env.REDIS_URL)
+  : null;
+
+if (redis) {
+  redis.on('connect', () => console.log('Connected to Redis'));
+  redis.on('error', (err) => console.error('Redis error:', err));
+}
+
+// Helper functions for Redis storage
+const ROOM_PREFIX = 'room:';
+const VIDEO_PREFIX = 'video:';
+const ROOM_TTL = 24 * 60 * 60; // 24 hours
+
+async function getRoom(roomId) {
+  if (!redis) return null;
+  const data = await redis.get(ROOM_PREFIX + roomId);
+  return data ? JSON.parse(data) : null;
+}
+
+async function setRoom(roomId, roomData) {
+  if (!redis) return;
+  await redis.setex(ROOM_PREFIX + roomId, ROOM_TTL, JSON.stringify(roomData));
+}
+
+async function deleteRoom(roomId) {
+  if (!redis) return;
+  await redis.del(ROOM_PREFIX + roomId);
+}
+
+async function getVideo(videoId) {
+  if (!redis) return null;
+  const data = await redis.get(VIDEO_PREFIX + videoId);
+  return data ? JSON.parse(data) : null;
+}
+
+async function setVideo(videoId, videoData) {
+  if (!redis) return;
+  await redis.setex(VIDEO_PREFIX + videoId, ROOM_TTL, JSON.stringify(videoData));
+}
+
+async function deleteVideo(videoId) {
+  if (!redis) return;
+  await redis.del(VIDEO_PREFIX + videoId);
 }
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -162,7 +210,7 @@ class Room {
 // REST API Routes
 
 // Create a new room
-app.post('/api/rooms', (req, res) => {
+app.post('/api/rooms', async (req, res) => {
   const { hostName } = req.body;
   if (!hostName) {
     return res.status(400).json({ error: 'Host name is required' });
@@ -170,8 +218,27 @@ app.post('/api/rooms', (req, res) => {
 
   const roomId = uuidv4().substring(0, 8).toUpperCase();
   const hostId = uuidv4();
+  
+  const roomData = {
+    id: roomId,
+    hostId,
+    hostSocketId: null,
+    hostName,
+    participants: {},
+    videoId: null,
+    videoState: {
+      isPlaying: false,
+      currentTime: 0,
+      lastUpdated: Date.now()
+    },
+    chat: [],
+    createdAt: Date.now()
+  };
+  
+  // Store in both memory and Redis
   const room = new Room(roomId, hostId, hostName);
   rooms.set(roomId, room);
+  await setRoom(roomId, roomData);
 
   res.json({
     roomId,
@@ -181,9 +248,21 @@ app.post('/api/rooms', (req, res) => {
 });
 
 // Get room info
-app.get('/api/rooms/:roomId', (req, res) => {
+app.get('/api/rooms/:roomId', async (req, res) => {
   const { roomId } = req.params;
-  const room = rooms.get(roomId.toUpperCase());
+  let room = rooms.get(roomId.toUpperCase());
+  
+  // Try to restore from Redis if not in memory
+  if (!room && redis) {
+    const roomData = await getRoom(roomId.toUpperCase());
+    if (roomData) {
+      room = new Room(roomData.id, roomData.hostId, roomData.hostName);
+      room.videoId = roomData.videoId;
+      room.videoState = roomData.videoState;
+      room.chat = roomData.chat || [];
+      rooms.set(roomId.toUpperCase(), room);
+    }
+  }
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -199,10 +278,22 @@ app.get('/api/rooms/:roomId', (req, res) => {
 });
 
 // Upload video to room
-app.post('/api/rooms/:roomId/video', upload.single('video'), (req, res) => {
+app.post('/api/rooms/:roomId/video', upload.single('video'), async (req, res) => {
   const { roomId } = req.params;
   const { hostId } = req.body;
-  const room = rooms.get(roomId.toUpperCase());
+  let room = rooms.get(roomId.toUpperCase());
+  
+  // Try to restore from Redis if not in memory
+  if (!room && redis) {
+    const roomData = await getRoom(roomId.toUpperCase());
+    if (roomData) {
+      room = new Room(roomData.id, roomData.hostId, roomData.hostName);
+      room.videoId = roomData.videoId;
+      room.videoState = roomData.videoState;
+      room.chat = roomData.chat || [];
+      rooms.set(roomId.toUpperCase(), room);
+    }
+  }
 
   if (!room) {
     // Clean up uploaded file if room not found
@@ -227,17 +318,21 @@ app.post('/api/rooms/:roomId/video', upload.single('video'), (req, res) => {
       fs.unlinkSync(oldVideo.filepath);
     }
     videos.delete(room.videoId);
+    await deleteVideo(room.videoId);
   }
 
   // Extract videoId from filename (we set it in multer)
   const videoId = path.basename(req.file.filename, path.extname(req.file.filename));
   
-  videos.set(videoId, {
+  const videoData = {
     filepath: req.file.path,
     mimetype: req.file.mimetype,
     originalname: req.file.originalname,
     size: req.file.size
-  });
+  };
+  
+  videos.set(videoId, videoData);
+  await setVideo(videoId, videoData);
 
   room.videoId = videoId;
   room.videoState = {
@@ -245,6 +340,19 @@ app.post('/api/rooms/:roomId/video', upload.single('video'), (req, res) => {
     currentTime: 0,
     lastUpdated: Date.now()
   };
+  
+  // Update room in Redis
+  await setRoom(roomId.toUpperCase(), {
+    id: room.id,
+    hostId: room.hostId,
+    hostSocketId: room.hostSocketId,
+    hostName: room.hostName,
+    participants: Object.fromEntries(room.participants),
+    videoId: room.videoId,
+    videoState: room.videoState,
+    chat: room.chat,
+    createdAt: room.createdAt
+  });
 
   console.log(`Video uploaded: ${req.file.originalname} (${(req.file.size / 1024 / 1024).toFixed(2)} MB)`);
 
@@ -264,9 +372,17 @@ app.post('/api/rooms/:roomId/video', upload.single('video'), (req, res) => {
 });
 
 // Stream video
-app.get('/api/video/:videoId', (req, res) => {
+app.get('/api/video/:videoId', async (req, res) => {
   const { videoId } = req.params;
-  const video = videos.get(videoId);
+  let video = videos.get(videoId);
+  
+  // Try to restore from Redis if not in memory
+  if (!video && redis) {
+    video = await getVideo(videoId);
+    if (video) {
+      videos.set(videoId, video);
+    }
+  }
 
   if (!video || !video.filepath || !fs.existsSync(video.filepath)) {
     return res.status(404).json({ error: 'Video not found' });
@@ -305,8 +421,20 @@ io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
   // Join room
-  socket.on('join-room', ({ roomId, nickname, hostId }) => {
-    const room = rooms.get(roomId.toUpperCase());
+  socket.on('join-room', async ({ roomId, nickname, hostId }) => {
+    let room = rooms.get(roomId.toUpperCase());
+    
+    // Try to restore from Redis if not in memory
+    if (!room && redis) {
+      const roomData = await getRoom(roomId.toUpperCase());
+      if (roomData) {
+        room = new Room(roomData.id, roomData.hostId, roomData.hostName);
+        room.videoId = roomData.videoId;
+        room.videoState = roomData.videoState;
+        room.chat = roomData.chat || [];
+        rooms.set(roomId.toUpperCase(), room);
+      }
+    }
 
     if (!room) {
       socket.emit('error', { message: 'Room not found' });
@@ -343,10 +471,18 @@ io.on('connection', (socket) => {
   });
 
   // Video control events (host only)
-  socket.on('video-play', ({ roomId, currentTime }) => {
+  socket.on('video-play', async ({ roomId, currentTime }) => {
     const room = rooms.get(roomId);
     if (room && socket.id === room.hostSocketId) {
       room.updateVideoState(true, currentTime);
+      // Save to Redis
+      if (redis) {
+        const roomData = await getRoom(roomId);
+        if (roomData) {
+          roomData.videoState = room.videoState;
+          await setRoom(roomId, roomData);
+        }
+      }
       socket.to(roomId).emit('video-sync', {
         action: 'play',
         currentTime,
@@ -355,10 +491,18 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('video-pause', ({ roomId, currentTime }) => {
+  socket.on('video-pause', async ({ roomId, currentTime }) => {
     const room = rooms.get(roomId);
     if (room && socket.id === room.hostSocketId) {
       room.updateVideoState(false, currentTime);
+      // Save to Redis
+      if (redis) {
+        const roomData = await getRoom(roomId);
+        if (roomData) {
+          roomData.videoState = room.videoState;
+          await setRoom(roomId, roomData);
+        }
+      }
       socket.to(roomId).emit('video-sync', {
         action: 'pause',
         currentTime,
@@ -367,10 +511,18 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('video-seek', ({ roomId, currentTime }) => {
+  socket.on('video-seek', async ({ roomId, currentTime }) => {
     const room = rooms.get(roomId);
     if (room && socket.id === room.hostSocketId) {
       room.updateVideoState(room.videoState.isPlaying, currentTime);
+      // Save to Redis
+      if (redis) {
+        const roomData = await getRoom(roomId);
+        if (roomData) {
+          roomData.videoState = room.videoState;
+          await setRoom(roomId, roomData);
+        }
+      }
       socket.to(roomId).emit('video-sync', {
         action: 'seek',
         currentTime,
