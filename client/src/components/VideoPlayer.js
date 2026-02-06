@@ -87,6 +87,10 @@ const VideoPlayer = forwardRef(({ videoUrl, isHost, onPlay, onPause, onSeek, onR
   const togglePlay = () => {
     if (ref.current) {
       if (ref.current.paused) {
+        // If guest, request sync first then play
+        if (!isHost && onRequestSync) {
+          onRequestSync();
+        }
         ref.current.play();
       } else {
         ref.current.pause();
