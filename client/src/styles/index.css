@@ -992,51 +992,54 @@ label {
    ======================================== */
 
 @media (max-width: 768px) {
+  .home-cards {
+    flex-direction: column;
+    padding: 20px;
+  }
+  
+  .card {
+    width: 100%;
+    max-width: 100%;
+  }
+
   .room-header {
-    flex-direction: column;
-    gap: 12px;
-    padding: 12px 16px;
-  }
-
-  .room-info {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .room-info h1 {
-    font-size: 1.25rem;
+    flex-direction: row;
+    justify-content: center;
+    padding: 16px;
   }
 
   .room-main {
     flex-direction: column;
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .video-section {
+    width: 100%;
   }
 
   .sidebar {
     width: 100%;
     border-left: none;
-    border-top: 1px solid var(--border-color);
-    max-height: 50vh;
+    border-radius: 13px;
+    max-height: none;
+    flex: 1;
   }
 
-  .video-section {
-    padding: 12px;
+  .chat-container {
+    min-height: 300px;
   }
 
-  .reaction-buttons {
-    flex-wrap: wrap;
+  .chat-messages {
+    max-height: 200px;
   }
 
-  .logo {
-    font-size: 2rem;
+  .btn {
+    width: 100%;
   }
 
-  .forms-container {
-    padding: 24px;
-  }
-
-  .features {
-    flex-direction: column;
-    align-items: center;
+  .btn-pill {
+    width: 84px;
   }
 }
 
