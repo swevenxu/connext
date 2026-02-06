@@ -223,40 +223,51 @@ class Room {
 
 // Create a new room
 app.post('/api/rooms', async (req, res) => {
-  const { hostName } = req.body;
-  if (!hostName) {
-    return res.status(400).json({ error: 'Host name is required' });
+  try {
+    const { hostName } = req.body;
+    if (!hostName) {
+      return res.status(400).json({ error: 'Host name is required' });
+    }
+
+    const roomId = uuidv4().substring(0, 8).toUpperCase();
+    const hostId = uuidv4();
+    
+    const roomData = {
+      id: roomId,
+      hostId,
+      hostSocketId: null,
+      hostName,
+      participants: {},
+      videoId: null,
+      videoState: {
+        isPlaying: false,
+        currentTime: 0,
+        lastUpdated: Date.now()
+      },
+      chat: [],
+      createdAt: Date.now()
+    };
+    
+    // Store in memory first (always works)
+    const room = new Room(roomId, hostId, hostName);
+    rooms.set(roomId, room);
+    
+    // Try to save to Redis (non-blocking)
+    try {
+      await setRoom(roomId, roomData);
+    } catch (redisErr) {
+      console.error('Redis save failed:', redisErr.message);
+    }
+
+    res.json({
+      roomId,
+      hostId,
+      message: 'Room created successfully'
+    });
+  } catch (err) {
+    console.error('Create room error:', err);
+    res.status(500).json({ error: 'Failed to create room' });
   }
-
-  const roomId = uuidv4().substring(0, 8).toUpperCase();
-  const hostId = uuidv4();
-  
-  const roomData = {
-    id: roomId,
-    hostId,
-    hostSocketId: null,
-    hostName,
-    participants: {},
-    videoId: null,
-    videoState: {
-      isPlaying: false,
-      currentTime: 0,
-      lastUpdated: Date.now()
-    },
-    chat: [],
-    createdAt: Date.now()
-  };
-  
-  // Store in both memory and Redis
-  const room = new Room(roomId, hostId, hostName);
-  rooms.set(roomId, room);
-  await setRoom(roomId, roomData);
-
-  res.json({
-    roomId,
-    hostId,
-    message: 'Room created successfully'
-  });
 });
 
 // Get room info
