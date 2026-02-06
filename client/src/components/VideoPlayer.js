@@ -67,6 +67,10 @@ const VideoPlayer = forwardRef(({ videoUrl, isHost, onPlay, onPause, onSeek, onR
   const handleLoadedMetadata = () => {
     if (ref.current) {
       setDuration(ref.current.duration);
+      // Auto-sync for guests when video loads
+      if (!isHost && onRequestSync) {
+        onRequestSync();
+      }
     }
   };
 
@@ -87,11 +91,13 @@ const VideoPlayer = forwardRef(({ videoUrl, isHost, onPlay, onPause, onSeek, onR
   const togglePlay = () => {
     if (ref.current) {
       if (ref.current.paused) {
-        // If guest, request sync first then play
+        // If guest, request sync - the sync response will trigger play
         if (!isHost && onRequestSync) {
           onRequestSync();
+          // Still play locally to satisfy mobile browser autoplay requirement
+          // The sync will adjust the time when it arrives
         }
-        ref.current.play();
+        ref.current.play().catch(console.error);
       } else {
         ref.current.pause();
       }

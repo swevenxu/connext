@@ -221,7 +221,7 @@ function Room() {
       </header>
 
       <div className="room-main">
-        <div className={`video-section ${!showChat && !showParticipants ? 'full-width' : ''}`}>
+        <div className={`video-section ${!showChat ? 'full-width' : ''}`}>
           {videoId && !isUploading ? (
             <VideoPlayer
               ref={videoRef}
