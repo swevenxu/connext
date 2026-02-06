@@ -149,16 +149,18 @@ const VideoPlayer = forwardRef(({ videoUrl, isHost, onPlay, onPause, onSeek, onR
         ref={ref}
         src={videoUrl}
         className="video-player"
+        playsInline
+        webkit-playsinline="true"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onPlay={handlePlay}
         onPause={handlePause}
         onSeeked={handleSeeked}
-        onClick={isHost ? togglePlay : undefined}
+        onClick={togglePlay}
       />
 
       {/* Center play button overlay */}
-      {!isPlaying && isHost && (
+      {!isPlaying && (
         <div className="play-overlay" onClick={togglePlay}>
           <div className="play-overlay-btn">
             <PlayIcon />
