@@ -357,8 +357,8 @@ label {
 
 .video-player-container {
   position: relative;
-  background: var(--background-card);
-  border-radius: var(--radius-lg);
+  background: #000;
+  border-radius: 13px;
   overflow: hidden;
   aspect-ratio: 16 / 9;
 }
@@ -369,12 +369,38 @@ label {
   object-fit: contain;
 }
 
+/* Center play overlay */
+.play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+.play-overlay-btn {
+  width: 80px;
+  height: 80px;
+  background: var(--primary-color);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.play-overlay:hover .play-overlay-btn {
+  transform: scale(1.1);
+}
+
 .video-controls {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.9));
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
   padding: 40px 16px 16px;
   opacity: 0;
   transition: opacity 0.3s ease;
@@ -386,9 +412,9 @@ label {
 
 .progress-bar-container {
   position: relative;
-  height: 6px;
+  height: 4px;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
+  border-radius: 2px;
   margin-bottom: 12px;
   cursor: pointer;
 }
@@ -410,7 +436,7 @@ label {
   position: absolute;
   height: 100%;
   background: var(--primary-color);
-  border-radius: 3px;
+  border-radius: 2px;
   pointer-events: none;
 }
 
@@ -424,25 +450,23 @@ label {
 .controls-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .control-btn {
   background: none;
   border: none;
   color: white;
-  font-size: 1.25rem;
   cursor: pointer;
-  padding: 4px 8px;
-  transition: transform 0.2s ease;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s ease;
 }
 
 .control-btn:hover {
-  transform: scale(1.1);
-}
-
-.play-btn {
-  font-size: 1.5rem;
+  opacity: 0.8;
 }
 
 .volume-control {
@@ -473,29 +497,6 @@ label {
   color: rgba(255, 255, 255, 0.8);
   font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
-}
-
-.sync-indicator {
-  color: var(--secondary-color);
-  font-size: 0.875rem;
-}
-
-.host-control-notice {
-  position: absolute;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.7);
-  padding: 8px 16px;
-  border-radius: var(--radius-full);
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.video-player-container:hover .host-control-notice {
-  opacity: 1;
 }
 
 /* No Video State */

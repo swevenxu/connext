@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || '';
+const isDev = window.location.port === '3000';
+const API_URL = process.env.REACT_APP_API_URL || (isDev ? 'http://localhost:5001' : '');
 
 function Home() {
   const [nickname, setNickname] = useState('');

@@ -6,8 +6,9 @@ import VideoPlayer from '../components/VideoPlayer';
 import Chat from '../components/Chat';
 import VideoUpload from '../components/VideoUpload';
 
-const API_URL = process.env.REACT_APP_API_URL || '';
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || window.location.origin;
+const isDev = window.location.port === '3000';
+const API_URL = process.env.REACT_APP_API_URL || (isDev ? 'http://localhost:5001' : '');
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || (isDev ? 'http://localhost:5001' : window.location.origin);
 
 function Room() {
   const { roomId } = useParams();
